@@ -2,8 +2,6 @@ name: Scrape NIFDC (2025 YTD)
 
 on:
   workflow_dispatch: {}
-  # schedule:
-  #   - cron: "0 9 * * 1"  # Mondays 09:00 UTC
 
 permissions:
   contents: write
@@ -11,7 +9,6 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,24 +16,24 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-- name: Install Python deps
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y build-essential python3-dev libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    python -m playwright install --with-deps chromium
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev
 
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
 
       - name: Run scraper
-        run: |
-          python scraper.py
+        run: python scraper.py
 
       - name: Commit CSVs
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/raw_batches_2025YTD.csv data/weekly_market_share.csv || true
@@ -46,20 +43,13 @@ jobs:
             git commit -m "Update CSVs (Actions)"
             git push
           fi
-      - name: Install HF CLI
-        run: |
-          python -m pip install --upgrade huggingface_hub
 
-      - name: Push CSVs to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}   # e.g., sreid191/albumin-market-share
-        run: |
-          echo "$HF_TOKEN" | huggingface-cli login --stdin
-          if [ -f data/raw_batches_2025YTD.csv ]; then
-            huggingface-cli upload "$HF_SPACE_ID" data/raw_batches_2025YTD.csv data/raw_batches_2025YTD.csv --repo-type space --commit-message "Update raw CSV"
-          fi
-          if [ -f data/weekly_market_share.csv ]; then
-            huggingface-cli upload "$HF_SPACE_ID" data/weekly_market_share.csv data/weekly_market_share.csv --repo-type space --commit-message "Update weekly CSV"
-          fi
-          echo "Uploaded to $HF_SPACE_ID"
+      - name: Upload logs & screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-debug
+          path: |
+            logs/**
+            screenshots/**
+
